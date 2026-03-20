@@ -40,6 +40,7 @@ class ProgramFile:
     
     # 赋值到内存中
     def _set_integer(self, val:int, pos:int, siz:int=8) -> None:
+
         data_list = []
         for i in range(siz):
             data_list.append((val >> (8 * i)) & 255)
@@ -54,35 +55,38 @@ class ProgramFile:
 
     # 系统调用
     def _syscal(self):
-        data_1 = self._get_integer(8)
-        data_2 = self._get_integer(16)
-        data_3 = self._get_integer(24)
-        data_4 = self._get_integer(32)
-        data_5 = self._get_integer(40)
-        data_6 = self._get_integer(48)
-        data_7 = self._get_integer(56)
+        data = [
+            self._get_integer(0),
+            self._get_integer(8),
+            self._get_integer(16),
+            self._get_integer(24),
+            self._get_integer(32),
+            self._get_integer(40),
+            self._get_integer(48),
+            self._get_integer(56)
+        ]
 
-        if data_1 == 1: # 输入一个字符
+        if data[1] == 1: # 输入一个字符
             try:
                 chr_val = ord(sys.stdin.read(1)) % 256
             except:
                 chr_val = 255
             self._set_integer(chr_val, 8)
 
-        elif data_1 == 2: # 输出一个字符串
-            pos_now = data_2
+        elif data[1] == 2: # 输出一个字符串
+            pos_now = data[2]
             while True:
                 if self.memory.get(pos_now, 0) == 0:
                     break
                 print(chr(self.memory[pos_now]), end="")
                 pos_now += 1
 
-        elif data_1 == 3: # 打开调试模式
-            self.debug = (data_2 != 0)
+        elif data[1] == 3: # 打开调试模式
+            self.debug = (data[2] != 0)
 
         # 未知的系统调用编号
         else:
-            raise ValueError(f"syscal {data_1} unknow.")
+            raise ValueError(f"syscal {data[1]} unknow.")
 
         # 系统调用结束的时候
         # 把初始位置清零
@@ -90,13 +94,38 @@ class ProgramFile:
 
     # 输出调试信息
     def _debug_show(self, cmd:str):
-        print(f"0x{self.pc:016x}: ", end="")
+        print(f"PC: 0x{self.pc:016x}")
+        print(f"SP: 0x{self.sp:016x}")
+        print(f"AP: 0x{self.ap:016x}")
+
+        # 输出系统调用调试信息
+        data = [
+            self._get_integer(0),
+            self._get_integer(8),
+            self._get_integer(16),
+            self._get_integer(24),
+            self._get_integer(32),
+            self._get_integer(40),
+            self._get_integer(48),
+            self._get_integer(56)
+        ]
+        if self.debug:
+            print("syscal args:")
+            for i in range(1, len(data)):
+                print(f"    0x{data[i]:016x}")
+        print()
 
         # 输出当前命令
+        print("    ", end="")
         if cmd == "PUSHIMM":
             print(f"PUSHIMM 0x{self._get_integer(self.pc + 1):016x}")
+
+        elif cmd == "SYSCAL":
+            print("SYSCAL\n")
+            
         else:
             print(cmd)
+        print()
 
         # 输出栈空间
         print(f"stack (0x{self.init_sp:016x} .. 0x{self.sp:016x}):")
@@ -389,14 +418,14 @@ class ProgramFile:
 
 
 
-    def read_program(self, filepath:str):
+    def read_program(self, filepath:str, encoding="utf-8", debug=False):
         position_now = 0
         segment_begin_now = 0
 
         late_insert:dict[tuple[int, int], str] = {} # 记录延迟插入位置
         token_value:dict[str, int] = {} # 记录标识符的值
 
-        for line_id, line in enumerate(list(open(filepath, "r"))):
+        for line_id, line in enumerate(list(open(filepath, "r", encoding=encoding))):
             # 去除注释
             line = line.strip()
             line = line.split("//", maxsplit=1)[0].strip()
@@ -452,6 +481,9 @@ class ProgramFile:
                     else:
                         jmp_label = part[:-1]
                         token_value[jmp_label] = position_now
+
+                        if debug:
+                            print(f"{jmp_label}: 0x{position_now:016x}")
 
                 else:
                     # 理解成 64bit 数据
@@ -607,5 +639,6 @@ class ProgramFile:
 
 if __name__ == "__main__":
     pf = ProgramFile()
-    pf.read_program("sample_asm/sum.asm")
-    pf.run(False)
+    pf.read_program("sample_asm/hello.asm", encoding="utf-8")
+    ret = pf.run()
+    print(f"program return 0x{ret:016x} ({ret})")
