@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Any
 import sys
 
 try:
@@ -19,6 +19,16 @@ class ProgramFile:
         self.ap = 0
         self.finish = False
         self.debug = False
+        self.syscal_hook:dict[int, Any] = {}
+
+    # syscal_hook 用来给出一个从整数到函数的映射
+    # 这个函数 func 会接受参数 func(self.memory, data)
+    # 其中 data 是内存中 0 .. 63 这 64 个字节构成的八个整数 
+    def set_syscal_hook(self, syscal_hook:dict[int, Any]):
+        self.syscal_hook = {
+            (item % VAL_RANGE) : syscal_hook[item] # 注意保证数值都是正数
+            for item in syscal_hook
+        }
 
     def _chk_nxt_pos(self, position_now:int, line_id:int):
         if position_now >= VAL_RANGE:
@@ -66,7 +76,12 @@ class ProgramFile:
             self._get_integer(56)
         ]
 
-        if data[1] == 1: # 输入一个字符
+        # 使用用户自定义系统调用
+        if self.syscal_hook.get(data[1]) is not None:
+            func = self.syscal_hook[data[1]]
+            func(self.memory, data)
+
+        elif data[1] == 1: # 输入一个字符
             try:
                 chr_val = ord(sys.stdin.read(1)) % 256
             except:
@@ -110,7 +125,7 @@ class ProgramFile:
             self._get_integer(56)
         ]
         if self.debug:
-            print("syscal args:")
+            print("SYSCAL ARGS:")
             for i in range(1, len(data)):
                 print(f"    0x{data[i]:016x}")
         print()
@@ -119,9 +134,6 @@ class ProgramFile:
         print("    ", end="")
         if cmd == "PUSHIMM":
             print(f"PUSHIMM 0x{self._get_integer(self.pc + 1):016x}")
-
-        elif cmd == "SYSCAL":
-            print("SYSCAL\n")
             
         else:
             print(cmd)
@@ -133,8 +145,9 @@ class ProgramFile:
             print(f"    0x{self._get_integer(i):016x}")
 
     # 运行程序
-    def run(self, debug_mode:bool=False) -> int:
-        self.debug = debug_mode
+    def run(self, debug_mode:Optional[bool]=None) -> int:
+        if isinstance(debug_mode, bool):
+            self.debug = debug_mode
 
         if self.finish is True:
             raise ValueError("you can not run program twice.")
@@ -223,7 +236,6 @@ class ProgramFile:
 
             elif cmd == "SYSCAL":
                 self._set_integer(1, 0)
-                self._syscal()
                 self.pc += 1
 
             elif cmd == "ADD":
@@ -399,9 +411,9 @@ class ProgramFile:
 
             elif cmd == "POPS":
                 self.sp -= 8
-                val_pos = self.sp
-                self.sp -= 8
                 offset = self._get_integer(self.sp)
+                self.sp -= 8
+                val_pos = self.sp
                 for i in range(8):
                     self.memory[self.sp - 8 * offset - 8 + i] = (
                         self.memory[val_pos + i])
@@ -412,9 +424,14 @@ class ProgramFile:
                     t = self.memory[self.sp - 16 + i]
                     self.memory[self.sp - 16 + i] = self.memory[self.sp -8 + i]
                     self.memory[self.sp - 8 + i] = t
+                self.pc += 1
 
             else:
                 raise ValueError(f"{cmd} is not a valid command.")
+            
+            # 系统调用可以由任何对 0 号位置的赋值触发
+            if self._get_integer(0) != 0:
+                self._syscal()
 
 
 
@@ -639,6 +656,6 @@ class ProgramFile:
 
 if __name__ == "__main__":
     pf = ProgramFile()
-    pf.read_program("sample_asm/hello.asm", encoding="utf-8")
-    ret = pf.run()
+    pf.read_program("sample_asm/fib.asm", encoding="utf-8")
+    ret = pf.run(debug_mode=False)
     print(f"program return 0x{ret:016x} ({ret})")

@@ -406,10 +406,10 @@ PC += 1;
 ```cpp
 {
     SP -= 8;
-    val_pos = SP;
+    long long offset = make_interger(mem, SP, SP + 8);
 
     SP -= 8;
-    long long offset = make_interger(mem, SP, SP + 8);
+    val_pos = SP;
 
     for(int i = 0; i < 8; i += 1) {
         mem[SP - 8 * offset - 8 + i] = mem[val_pos + i];
