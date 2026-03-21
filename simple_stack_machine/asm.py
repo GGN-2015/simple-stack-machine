@@ -1,5 +1,6 @@
 from typing import Optional, Any
 import sys
+import re
 
 try:
     from .ins_code import INSTURCTION_MAP, VAL_RANGE, DEASM_INSTURCTION_MAP
@@ -10,28 +11,36 @@ class ProgramFile:
     def __init__(self) -> None:
         self._clear()
 
+    # Convert interger string to int
+    @classmethod
+    def safe_val_eval(cls, s:str) -> int:
+        pattern = r"0x[\dA-Fa-f]+|\d+|0b\d+"
+        if re.fullmatch(pattern, s) is None:
+            raise ValueError()
+        return eval(s)
+
     def _clear(self):
         self.initial_memory = {}
         self.memory = {}
         self.pc = 0
         self.sp = 0
-        self.init_sp = 0 # 初始 sp
+        self.init_sp = 0 # Initial sp
         self.ap = 0
         self.finish = False
         self.debug = False
         self.syscal_hook:dict[int, Any] = {}
         self.stdout_arr = ""
 
-        # 开启这个开关，可以让程序不向标准输出流中输出内容
-        # 而仅仅通过 self.stdout_arr 这个字符串记录程序的输出
+        # Enable this switch to prevent the program from outputting content to the standard output stream
+        # and only record the program's output through the self.stdout_arr string
         self.ignore_stdout = False 
 
-    # syscal_hook 用来给出一个从整数到函数的映射
-    # 这个函数 func 会接受参数 func(self.memory, data)
-    # 其中 data 是内存中 0 .. 63 这 64 个字节构成的八个整数 
+    # syscal_hook is used to provide a mapping from integers to functions
+    # This function func will accept parameters func(self.memory, data)
+    # where data is eight integers composed of the 64 bytes from 0 to 63 in memory
     def set_syscal_hook(self, syscal_hook:dict[int, Any]):
         self.syscal_hook = {
-            (item % VAL_RANGE) : syscal_hook[item] # 注意保证数值都是正数
+            (item % VAL_RANGE) : syscal_hook[item] # Note to ensure all values are positive
             for item in syscal_hook
         }
 
@@ -43,7 +52,7 @@ class ProgramFile:
         if self.initial_memory.get(position_now) is not None:
             raise ValueError(f"{position_now} refilled.")
     
-    # 获取内存中的整数
+    # Get integer from memory
     def _get_integer(self, pos:int, siz:int=8) -> int:
         data_list = []
         for i in range(siz):
@@ -53,7 +62,7 @@ class ProgramFile:
             data_val = ((data_val << 8) | data_list[i])
         return data_val
     
-    # 赋值到内存中
+    # Assign value to memory
     def _set_integer(self, val:int, pos:int, siz:int=8) -> None:
 
         data_list = []
@@ -62,13 +71,13 @@ class ProgramFile:
         for i in range(siz):
             self.memory[pos + i] = data_list[i]
 
-    # 从 self.initial_memory 拷贝到 self.memory
+    # Copy from self.initial_memory to self.memory
     def _load_memory(self):
         self.memory = {}
         for item in self.initial_memory:
             self.memory[item] = self.initial_memory[item]
 
-    # 系统调用
+    # System call
     def _syscal(self):
         data = [
             self._get_integer(0),
@@ -81,51 +90,51 @@ class ProgramFile:
             self._get_integer(56)
         ]
 
-        # 使用用户自定义系统调用
+        # Use user-defined system call
         if self.syscal_hook.get(data[1]) is not None:
             func = self.syscal_hook[data[1]]
             func(self.memory, data)
 
-        elif data[1] == 1: # 输入一个字符
+        elif data[1] == 1: # Input a character
             try:
                 chr_val = ord(sys.stdin.read(1)) % 256
             except:
                 chr_val = 255
-            self._set_integer(chr_val, 8) # 成功读入的字符信息，送入 data[1]
+            self._set_integer(chr_val, 8) # Successfully read character information is sent to data[1]
 
-        elif data[1] == 2: # 输出一个字符串
+        elif data[1] == 2: # Output a string
             pos_now = data[2]
             chr_cnt = 0
             while True:
                 if self.memory.get(pos_now, 0) == 0:
                     break
 
-                # 记录程序的标准输出
+                # Record the program's standard output
                 chr_cnt += 1
                 self.stdout_arr += chr(self.memory[pos_now])
                 if not self.ignore_stdout:
                     print(chr(self.memory[pos_now]), end="")
                 pos_now += 1
-            self._set_integer(chr_cnt, 8) # 成功输出的字符个数，送入 data[1]
+            self._set_integer(chr_cnt, 8) # The number of successfully output characters is sent to data[1]
 
-        elif data[1] == 3: # 打开调试模式
+        elif data[1] == 3: # Enable debug mode
             self.debug = (data[2] != 0)
 
-        # 未知的系统调用编号
+        # Unknown system call number
         else:
             raise ValueError(f"syscal {data[1]} unknow.")
 
-        # 系统调用结束的时候
-        # 把初始位置清零
+        # When the system call ends
+        # Clear the initial position
         self._set_integer(0, 0)
 
-    # 输出调试信息
+    # Output debug information
     def _debug_show(self, cmd:str):
         print(f"PC: 0x{self.pc:016x}")
         print(f"SP: 0x{self.sp:016x}")
         print(f"AP: 0x{self.ap:016x}")
 
-        # 输出系统调用调试信息
+        # Output system call debug information
         data = [
             self._get_integer(0),
             self._get_integer(8),
@@ -142,7 +151,7 @@ class ProgramFile:
                 print(f"    0x{data[i]:016x}")
         print()
 
-        # 输出当前命令
+        # Output current command
         print("    ", end="")
         if cmd == "PUSHIMM":
             print(f"PUSHIMM 0x{self._get_integer(self.pc + 1):016x}")
@@ -151,12 +160,20 @@ class ProgramFile:
             print(cmd)
         print()
 
-        # 输出栈空间
+        # Output stack space
         print(f"stack (0x{self.init_sp:016x} .. 0x{self.sp:016x}):")
         for i in range(self.init_sp, self.sp, 8):
             print(f"    0x{self._get_integer(i):016x}")
 
-    # 运行程序
+    # Get signed value for a unsined value
+    @classmethod
+    def get_real_val(cls, val:int) -> int:
+        if ((val >> 63) & 1) != 0:
+            return val - VAL_RANGE
+        else:
+            return val
+
+    # Run the program
     def run(self, debug_mode:Optional[bool]=None) -> int:
         if isinstance(debug_mode, bool):
             self.debug = debug_mode
@@ -165,8 +182,8 @@ class ProgramFile:
             raise ValueError("you can not run program twice.")
         self._load_memory()
         self.finish = True
-        self.pc = self._get_integer(8) # 初始化 pc
-        self.sp = self._get_integer(16) # 初始化 sp
+        self.pc = self._get_integer(8) # Initialize pc
+        self.sp = self._get_integer(16) # Initialize sp
         self.init_sp = self.sp
         self.ap = 0
 
@@ -176,10 +193,10 @@ class ProgramFile:
             if DEASM_INSTURCTION_MAP.get(cmd_val) is None:
                 raise ValueError(f"{cmd_val} is not a command.")
             
-            # 找到对应的命令名称
+            # Find the corresponding command name
             cmd = DEASM_INSTURCTION_MAP[cmd_val]
 
-            # 输出调试信息
+            # Output debug information
             if self.debug:
                 self._debug_show(cmd)
                 input("(enter to continue)\n")
@@ -387,7 +404,7 @@ class ProgramFile:
                 val_2 = self._get_integer(self.sp)
                 self.sp -= 8
                 val_1 = self._get_integer(self.sp)
-                ans = (val_1 <= val_2)
+                ans = (self.get_real_val(val_1) <= self.get_real_val(val_2))
                 self._set_integer(ans, self.sp)
                 self.sp += 8
                 self.pc += 1
@@ -397,7 +414,7 @@ class ProgramFile:
                 val_2 = self._get_integer(self.sp)
                 self.sp -= 8
                 val_1 = self._get_integer(self.sp)
-                ans = (val_1 < val_2)
+                ans = (self.get_real_val(val_1) < self.get_real_val(val_2))
                 self._set_integer(ans, self.sp)
                 self.sp += 8
                 self.pc += 1
@@ -444,44 +461,44 @@ class ProgramFile:
             else:
                 raise ValueError(f"{cmd} is not a valid command.")
             
-            # 系统调用可以由任何对 0 号位置的赋值触发
+            # System calls can be triggered by any assignment to position 0
             if self._get_integer(0) != 0:
                 self._syscal()
 
 
 
-    # 这个函数会返回一个 dict[str, int]
-    # 表示所有标识符号对应的程序位置
+    # This function returns a dict[str, int]
+    # representing the program positions corresponding to all symbols
     def read_program(self, filepath:str, encoding="utf-8", debug=False) -> dict:
         position_now = 0
         segment_begin_now = 0
 
-        late_insert:dict[tuple[int, int], str] = {} # 记录延迟插入位置
-        token_value:dict[str, int] = {} # 记录标识符的值
+        late_insert:dict[tuple[int, int], str] = {} # Record delayed insertion positions
+        token_value:dict[str, int] = {} # Record the values of identifiers
 
         for line_id, line in enumerate(list(open(filepath, "r", encoding=encoding))):
-            # 去除注释
+            # Remove comments
             line = line.strip()
             line = line.split("//", maxsplit=1)[0].strip()
             if line == "":
                 continue
             
-            # 处理四种东西
-            #   位置调整符号
-            #   指令
-            #   64bit 数据
-            #   跳转标识符
+            # Process four types of items
+            #   Position adjustment symbols
+            #   Instructions
+            #   64-bit data
+            #   Jump identifiers
             for part in line.split():
                 
-                # 识别到字符型立即数
+                # Recognize character-type immediate values
                 if part.startswith("#"):
-                    val = eval(part[1:])
+                    val = self.safe_val_eval(part[1:])
                     self.check_pos(position_now)
                     self.initial_memory[position_now] = val % 256
                     position_now += 1
                     self._chk_nxt_pos(position_now, line_id)
 
-                # 识别到指令
+                # Recognize instructions
                 elif INSTURCTION_MAP.get(part) is not None:
                     self.check_pos(position_now)
                     self.initial_memory[position_now] = (
@@ -490,18 +507,18 @@ class ProgramFile:
                     position_now += 1
                     self._chk_nxt_pos(position_now, line_id)
 
-                # 识别到冒号
-                # 分别考虑跳转标识符和位置调整符
+                # Recognize colons
+                # Consider jump identifiers and position adjusters separately
                 elif part.endswith(":"):
 
                     if len(part) == 1:
                         raise ValueError(f"{line_id}: colon detected.")
                     
-                    # 得到了一个位置调整符
+                    # Got a position adjuster
                     if part[0].isdigit():
-                        data_val = eval(part[:-1])
+                        data_val = self.safe_val_eval(part[:-1])
 
-                        # 保证当前段长度是八的整数倍
+                        # Ensure the current segment length is a multiple of eight
                         while (position_now - segment_begin_now) % 8 != 0:
                             self.check_pos(position_now)
                             self.initial_memory[position_now] = 0
@@ -511,7 +528,7 @@ class ProgramFile:
                         segment_begin_now = position_now
                         self._chk_nxt_pos(position_now, line_id)
 
-                    # 得到了一个跳转标识符
+                    # Got a jump identifier
                     else:
                         jmp_label = part[:-1]
                         token_value[jmp_label] = position_now
@@ -520,9 +537,9 @@ class ProgramFile:
                             print(f"{jmp_label}: 0x{position_now:016x}")
 
                 else:
-                    # 理解成 64bit 数据
+                    # Interpret as 64-bit data
                     if part[0].isdigit():
-                        data_val = eval(part)
+                        data_val = self.safe_val_eval(part)
                         for i in range(8):
                             chr_now = (data_val >> (i * 8)) & ((1 << 8) - 1)
                             self.check_pos(position_now)
@@ -530,14 +547,14 @@ class ProgramFile:
                             position_now += 1
                             self._chk_nxt_pos(position_now, line_id)
 
-                    # 理解成一个标识符使用
-                    # 标识符需要在全局扫描结束后赋值
+                    # Interpret as an identifier usage
+                    # Identifiers need to be assigned after global scanning is complete
                     else:
                         late_insert[(position_now, line_id)] = part
                         position_now += 8
                         self._chk_nxt_pos(position_now, line_id)
 
-        # 为标识符填写值
+        # Fill values for identifiers
         for pos, line_id in late_insert:
             token = late_insert[(pos, line_id)]
             if token_value.get(token) is None:
@@ -551,25 +568,25 @@ class ProgramFile:
                 pos_now += 1
                 self._chk_nxt_pos(pos_now, line_id)
 
-        # 返回符号表
+        # Return symbol table
         return token_value
     
 
 
-    # 用于计算反汇编
-    # 并计算所有的跳转指令目标点
+    # Used to calculate disassembly
+    # and calculate the target points of all jump instructions
     def _debug_show_raw(self, program_segment:list[int]=[], pos_set:Optional[set[int]]=None) -> set[int]:
         show_text = pos_set is not None
         need_calc_set = not show_text
 
-        # 需要输出的对象
+        # Objects to be output
         output_item = []
 
-        # 需要计算 pos_set
+        # Need to calculate pos_set
         if pos_set is None:
             pos_set = set()
 
-        # 计算代码段起始位置
+        # Calculate the start position of the code segment
         if program_segment == []:
             ans = 0
             for i in range(15, 7, -1):
@@ -578,17 +595,17 @@ class ProgramFile:
             program_segment = [ans]
         assert isinstance(program_segment, list)
 
-        # 第多少个程序段
+        # Which program segment it is
         ps_id = 1
 
-        # 开始反汇编
+        # Start disassembly
         pos_val_pairt = sorted(list(self.initial_memory.items()))
         vis = {}
         for begin_pos, _ in pos_val_pairt:
             if vis.get(begin_pos) is not None:
                 continue
             
-            # 为了输出缩进记录行首位置
+            # Record the line start position for output indentation
             line_front = True
             output_item.append(f"\n0x{begin_pos:016x}:")
             is_program = (begin_pos in program_segment)
@@ -627,7 +644,7 @@ class ProgramFile:
                         ps_id += 1
                         output_item.append(f"    ")
 
-                    # 遇到了命令
+                    # Encountered a command
                     if DEASM_INSTURCTION_MAP.get(val) is not None:
                         cmd = DEASM_INSTURCTION_MAP[val]
                         output_item.append(f"{cmd}")
@@ -646,17 +663,17 @@ class ProgramFile:
                             output_item.append("\n")
                         line_front = True
                         
-                    # 遇到了未知命令
+                    # Encountered an unknown command
                     else:
                         output_item.append(f"#0x{val:02x} // unknown cmd\n")
                         line_front = True
                         index += 1
         
-        # 显示可视化版本的反汇编
+        # Display visual version of disassembly
         if show_text:
             print("".join(output_item))
 
-        # 计算能够推测出来的分界点集合
+        # Calculate the set of inferable boundary points
         if need_calc_set:
             non_empty_pos = [
                 item.strip()
@@ -665,17 +682,17 @@ class ProgramFile:
             for i in range(2, len(non_empty_pos)):
                 if non_empty_pos[i].strip() == "BR" or non_empty_pos[i].strip() == "JMP":
                     if non_empty_pos[i-2] == "PUSHIMM":
-                        pos_set.add(eval(non_empty_pos[i-1]))
+                        pos_set.add(self.safe_val_eval(non_empty_pos[i-1]))
 
         return pos_set
     
-    # 输出反汇编
+    # Output disassembly
     def de_asm(self, program_segment:list[int]=[]):
         pos_set = self._debug_show_raw(program_segment, None)
         self._debug_show_raw(program_segment, pos_set)
 
 if __name__ == "__main__":
     pf = ProgramFile()
-    pf.read_program("sample_asm/sum.asm")
+    pf.read_program("sample_asm/euclid.asm")
     ret = pf.run(debug_mode=False)
     print(f"program return 0x{ret:016x} ({ret})")
