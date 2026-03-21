@@ -20,6 +20,11 @@ class ProgramFile:
         self.finish = False
         self.debug = False
         self.syscal_hook:dict[int, Any] = {}
+        self.stdout_arr = ""
+
+        # 开启这个开关，可以让程序不向标准输出流中输出内容
+        # 而仅仅通过 self.stdout_arr 这个字符串记录程序的输出
+        self.ignore_stdout = False 
 
     # syscal_hook 用来给出一个从整数到函数的映射
     # 这个函数 func 会接受参数 func(self.memory, data)
@@ -93,7 +98,11 @@ class ProgramFile:
             while True:
                 if self.memory.get(pos_now, 0) == 0:
                     break
-                print(chr(self.memory[pos_now]), end="")
+
+                # 记录程序的标准输出
+                self.stdout_arr += chr(self.memory[pos_now])
+                if not self.ignore_stdout:
+                    print(chr(self.memory[pos_now]), end="")
                 pos_now += 1
 
         elif data[1] == 3: # 打开调试模式
@@ -160,7 +169,7 @@ class ProgramFile:
 
         while True:
             
-            cmd_val = self.memory[self.pc]
+            cmd_val = self.memory.get(self.pc, 0)
             if DEASM_INSTURCTION_MAP.get(cmd_val) is None:
                 raise ValueError(f"{cmd_val} is not a command.")
             
@@ -640,8 +649,6 @@ class ProgramFile:
                 item.strip()
                 for item in output_item
                 if item.strip() != "" and not item.strip().startswith("//")]
-            print(output_item)
-            print(non_empty_pos)
             for i in range(2, len(non_empty_pos)):
                 if non_empty_pos[i].strip() == "BR" or non_empty_pos[i].strip() == "JMP":
                     if non_empty_pos[i-2] == "PUSHIMM":
@@ -656,6 +663,6 @@ class ProgramFile:
 
 if __name__ == "__main__":
     pf = ProgramFile()
-    pf.read_program("sample_asm/fib.asm", encoding="utf-8")
+    pf.read_program("sample_asm/euclid.asm", encoding="utf-8")
     ret = pf.run(debug_mode=False)
     print(f"program return 0x{ret:016x} ({ret})")

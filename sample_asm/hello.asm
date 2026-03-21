@@ -1,23 +1,33 @@
-// 程序：输出 hello world
+// Program: Output hello world
 
-
-
-// 描述 PC 的初始值
+// Describe the initial value of PC
 0x0000000000000008:
     0x0000000100000000
 
-
-
-// 描述 SP 的初始值
+// Describe the initial value of SP
 0x0000000000000010:
     0x0000000200000010
 
-
-
-// 代码段
+// Code segment
 0x0000000100000000:
 
-    // 2 号系统调用，输出字符串
+    // Call function func_call
+    // The offset value 21 provided here
+    // allows the function to return to the instruction after JMP
+    PUSHPC
+    PUSHIMM 21
+    ADD 
+    PUSHIMM func_call
+    JMP
+
+    // Push an immediate value here
+    // Prevent stack underflow
+    PUSHIMM 0x0000000000000000
+    HALT
+
+func_call:
+
+    // System call No.2, output string
     PUSHIMM 0x8
     POPAP
     PUSHIMM 0x2
@@ -28,21 +38,15 @@
     SAVE
     SYSCAL
 
-    // 这里 push 一个立即数
-    // 防止堆栈下溢出
-    PUSHIMM 0x0000000000000000
-    HALT
+    // Function return
+    RET
 
-
-
-// 数据段
-// 使用井号开头可以描述一个字节的信息
+// Data segment
+// Lines starting with a pound sign describe a byte of information
 0x0000000200000000:
 hello_world_str:
     #0x68 #0x65 #0x6c #0x6c #0x6f #0x20 #0x77 #0x6f 
     #0x72 #0x6c #0x64 #0x21 #0x0a #0x00 #0x00 #0x00
 
-
-
-// 堆栈段
+// Stack segment
 0x0000000200000010:

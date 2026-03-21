@@ -1,24 +1,17 @@
-// 程序：计算斐波那契数列
+// Program: Calculate Fibonacci sequence
 
-
-
-
-// 描述 PC 的初始值
+// Describe the initial value of PC
 0x0000000000000008:
     0x0000000100000000
 
-
-
-// 描述 SP 的初始值
+// Describe the initial value of SP
 0x0000000000000010:
     0x0000000200000010
 
-
-
-// 代码段
+// Code segment
 0x0000000100000000:
 
-    // 计算第 n 个斐波那契数
+    // Calculate the nth Fibonacci number
     PUSHIMM 10
     // stack: [n]
 

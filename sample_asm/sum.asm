@@ -45,21 +45,19 @@ begin_of_loop:
     // stack: [i, new_ans]
 
 
-    PUSHIMM 0x0000000000000001
-    // stack: [i, new_ans, 1]
-
-
     // 拷贝 i 到栈顶
-    PUSHIMM 0x0000000000000002
+    PUSHIMM 0x0000000000000001
     DUP
-    // stack: [i, new_ans, 1, i]
+    // stack: [i, new_ans, i]
 
 
 
     // i = i - 1
     PUSHIMM 0x0000000000000001
     SUB
-    // stack: [i, new_ans, 1, new_i]
+    // stack: [i, new_ans, new_i]
+
+    PUSHIMM 1
     POPS 
     // stack: [new_i, new_ans]
 
