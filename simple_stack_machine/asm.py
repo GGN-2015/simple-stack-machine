@@ -91,19 +91,22 @@ class ProgramFile:
                 chr_val = ord(sys.stdin.read(1)) % 256
             except:
                 chr_val = 255
-            self._set_integer(chr_val, 8)
+            self._set_integer(chr_val, 8) # 成功读入的字符信息，送入 data[1]
 
         elif data[1] == 2: # 输出一个字符串
             pos_now = data[2]
+            chr_cnt = 0
             while True:
                 if self.memory.get(pos_now, 0) == 0:
                     break
 
                 # 记录程序的标准输出
+                chr_cnt += 1
                 self.stdout_arr += chr(self.memory[pos_now])
                 if not self.ignore_stdout:
                     print(chr(self.memory[pos_now]), end="")
                 pos_now += 1
+            self._set_integer(chr_cnt, 8) # 成功输出的字符个数，送入 data[1]
 
         elif data[1] == 3: # 打开调试模式
             self.debug = (data[2] != 0)
@@ -223,9 +226,12 @@ class ProgramFile:
                 self.sp += 8
                 self.pc += 1
 
-            elif cmd == "RET":
+            elif cmd == "CALL":
+                old_pc = self.pc
                 self.sp -= 8
                 self.pc = self._get_integer(self.sp)
+                self._set_integer(old_pc + 1, self.sp)
+                self.sp += 8
 
             elif cmd == "LOAD":
                 for i in range(8):
@@ -300,7 +306,7 @@ class ProgramFile:
             elif cmd == "NEG":
                 self.sp -= 8
                 val = self._get_integer(self.sp)
-                ans = (~val) % VAL_RANGE
+                ans = (-val) % VAL_RANGE
                 self._set_integer(ans, self.sp)
                 self.sp += 8
                 self.pc += 1
@@ -444,7 +450,9 @@ class ProgramFile:
 
 
 
-    def read_program(self, filepath:str, encoding="utf-8", debug=False):
+    # 这个函数会返回一个 dict[str, int]
+    # 表示所有标识符号对应的程序位置
+    def read_program(self, filepath:str, encoding="utf-8", debug=False) -> dict:
         position_now = 0
         segment_begin_now = 0
 
@@ -542,7 +550,12 @@ class ProgramFile:
                 self.initial_memory[pos_now] = chr_now
                 pos_now += 1
                 self._chk_nxt_pos(pos_now, line_id)
+
+        # 返回符号表
+        return token_value
     
+
+
     # 用于计算反汇编
     # 并计算所有的跳转指令目标点
     def _debug_show_raw(self, program_segment:list[int]=[], pos_set:Optional[set[int]]=None) -> set[int]:
@@ -663,6 +676,6 @@ class ProgramFile:
 
 if __name__ == "__main__":
     pf = ProgramFile()
-    pf.read_program("sample_asm/euclid.asm", encoding="utf-8")
+    pf.read_program("sample_asm/sum.asm")
     ret = pf.run(debug_mode=False)
     print(f"program return 0x{ret:016x} ({ret})")

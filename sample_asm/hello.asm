@@ -12,13 +12,8 @@
 0x0000000100000000:
 
     // Call function func_call
-    // The offset value 21 provided here
-    // allows the function to return to the instruction after JMP
-    PUSHPC
-    PUSHIMM 21
-    ADD 
     PUSHIMM func_call
-    JMP
+    CALL
 
     // Push an immediate value here
     // Prevent stack underflow
@@ -39,7 +34,7 @@ func_call:
     SYSCAL
 
     // Function return
-    RET
+    JMP
 
 // Data segment
 // Lines starting with a pound sign describe a byte of information

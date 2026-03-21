@@ -12,7 +12,7 @@ INSTURCTION_MAP = {
     "POPSP": 5,
     "PUSHSP": 6,
     "PUSHPC": 7,
-    "RET": 8,
+    "CALL": 8,
     "LOAD": 9,
     "SAVE": 10,
     "SYSCAL": 11,

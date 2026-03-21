@@ -53,12 +53,8 @@ gcd:
     // stack: [..., a, b, 0, ret_addr, a_nxt, b_nxt, 0]
 
     // Recursively call gcd function
-    PUSHPC
-    PUSHIMM 21
-    ADD
     PUSHIMM gcd
-    // stack: [..., a, b, 0, ret_addr, a_nxt, b_nxt, 0, re_addr_nxt]
-    JMP
+    CALL
 
     // After function returns
     // Write function return value back to the previous function call position
@@ -99,12 +95,8 @@ _main:
     // stack: [a, b, 0]
 
     // Recursively call gcd function
-    PUSHPC
-    PUSHIMM 21
-    ADD
     PUSHIMM gcd
-    // stack: [..., a, b, 0, ret_addr]
-    JMP
+    CALL
 
     // After function returns
     // stack: [..., a, b, ans]
