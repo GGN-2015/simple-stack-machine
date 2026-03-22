@@ -1,0 +1,19 @@
+
+// Turn on debug mode
+debug_on:
+    // stack: [ret_addr]
+
+    PUSHIMM 8
+    POPAP
+    PUSHIMM 3
+    SAVE    
+    
+    PUSHIMM 16
+    POPAP
+    PUSHIMM 1
+    SAVE
+    SYSCAL
+    
+    // stack: [ret_addr]
+    // Function return
+    JMP

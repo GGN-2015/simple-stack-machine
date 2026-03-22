@@ -1,0 +1,72 @@
+
+// Calculate the greatest common divisor
+gcd:
+    // Before function call, store function parameters before return address
+    // stack: [..., a, b, 0, ret_addr]
+
+    // Copy function parameters to current function's stack space
+    PUSHIMM 3
+    DUP
+    // stack: [..., a, b, 0, ret_addr, a]
+
+    PUSHIMM 3
+    DUP
+    // stack: [..., a, b, 0, ret_addr, a, b]
+
+    PUSHIMM 0
+    DUP
+    PUSHIMM 0
+    EQU
+    // stack: [..., a, b, 0, ret_addr, a, b, (b == 0)]
+    PUSHIMM gcd_ret
+    BR
+    // stack: [..., a, b, 0, ret_addr, a, b]
+
+    EXCH
+    // stack: [..., a, b, 0, ret_addr, b, a]
+
+    PUSHIMM 1
+    DUP
+    // stack: [..., a, b, 0, ret_addr, b, a, b]
+
+    MOD
+    // stack: [..., a, b, 0, ret_addr, b, a % b]
+
+    // Construct information for next function call
+    PUSHIMM 0
+    // stack: [..., a, b, 0, ret_addr, a_nxt, b_nxt, 0]
+
+    // Recursively call gcd function
+    PUSHIMM gcd
+    CALL
+
+    // After function returns
+    // Write function return value back to the previous function call position
+    // stack: [..., a, b, 0, ret_addr, a_nxt, b_nxt, ans_now]
+    PUSHIMM 3
+    POPS
+    // stack: [..., a, b, ans_now, ret_addr, a_nxt, b_nxt]
+
+    POP
+    POP
+    // stack: [..., a, b, ans_now, ret_addr]
+
+    JMP
+    // Function return
+    // Stack space after return: [..., a, b, ans_now]
+
+gcd_ret:
+    // stack: [..., a, b, 0, ret_addr, a_now, b_now]
+
+    POP
+    // stack: [..., a, b, 0, ret_addr, a_now]
+
+    // Set return value address
+    PUSHIMM 1
+    POPS
+    // stack: [..., a, b, a_now, ret_addr]
+
+    // Function return
+    JMP
+    // Stack space after return will be
+    // stack: [..., a, b, a_now]

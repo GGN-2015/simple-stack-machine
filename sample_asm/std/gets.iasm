@@ -1,0 +1,157 @@
+INCLUDE "getc.iasm"
+
+// Read a string from STDIN
+// save it to s_addr
+// save the number of input char to ans_pos
+gets:
+    // stack: [s_addr, max_siz, (ans_pos)0, ret_addr]
+
+    PUSHIMM 3
+    DUP
+    // stack: [s_addr, max_siz, (ans_pos)0, ret_addr, s_addr]
+    // copy an addr to stack top
+
+    PUSHIMM 3
+    DUP
+    // stack: [s_addr, max_siz, (ans_pos)0, ret_addr, s_addr, max_siz]
+
+    PUSHIMM 1
+    SUB
+    // stack: [s_addr, max_siz, (ans_pos)0, ret_addr, s_addr, res_chr_can_read]
+    // max_siz - 1 is (res_chr_can_read) since we need a \0 in the End
+
+_gets_loop:
+    // stack: [s_addr, max_siz, chr_read, ret_addr, s_addr, res_chr_can_read]
+
+    PUSHIMM 0
+    DUP
+    PUSHIMM 0
+    EQU
+    // stack: [s_addr, max_siz, chr_read, ret_addr, s_addr, res_chr_can_read, (res_chr_can_read==0)]
+
+    PUSHIMM 0 // This value is chr_tmp
+              // It's useless, but to make the same size of stack after JMP
+    EXCH
+    // stack: [s_addr, max_siz, chr_read, ret_addr, s_addr, res_chr_can_read, 0, (res_chr_can_read==0)]
+    PUSHIMM _gets_ret 
+    BR // Return if all memory is used
+
+    // branch failed
+    // stack: [s_addr, max_siz, chr_read, ret_addr, s_addr, res_chr_can_read, 0]
+    PUSHIMM getc
+    CALL
+    // stack: [s_addr, max_siz, chr_read, ret_addr, s_addr, res_chr_can_read, chr_now]
+
+    PUSHIMM 0
+    DUP
+    // stack: [s_addr, max_siz, chr_read, ret_addr, s_addr, res_chr_can_read, chr_now, chr_now]
+
+    PUSHIMM 255
+    EQU
+    // stack: [s_addr, max_siz, chr_read, ret_addr, s_addr, res_chr_can_read, chr_now, (chr_now == 255)]
+    PUSHIMM _gets_ret // If chat now is EOF, return function
+    BR
+
+    PUSHIMM 0
+    DUP
+    // stack: [s_addr, max_siz, chr_read, ret_addr, s_addr, res_chr_can_read, chr_now, chr_now]
+
+    PUSHIMM 3
+    DUP
+    // stack: [s_addr, max_siz, chr_read, ret_addr, s_addr, res_chr_can_read, chr_now, chr_now, s_addr]
+
+    POPAP
+    // stack: [s_addr, max_siz, chr_read, ret_addr, s_addr, res_chr_can_read, chr_now, chr_now]
+
+    LOAD
+    // stack: [s_addr, max_siz, chr_read, ret_addr, s_addr, res_chr_can_read, chr_now, chr_now, old_int_val]
+
+    PUSHIMM 0xFFFFFFFFFFFFFF00
+    AND
+    // stack: [s_addr, max_siz, chr_read, ret_addr, s_addr, res_chr_can_read, chr_now, chr_now, zero_low_byte]
+
+    OR
+    // stack: [s_addr, max_siz, chr_read, ret_addr, s_addr, res_chr_can_read, chr_now, new_int_val]
+
+    SAVE
+    // stack: [s_addr, max_siz, chr_read, ret_addr, s_addr, res_chr_can_read, chr_now]
+
+    EXCH
+    // stack: [s_addr, max_siz, chr_read, ret_addr, s_addr, chr_now, res_chr_can_read]
+
+    PUSHIMM 1
+    SUB
+    // stack: [s_addr, max_siz, chr_read, ret_addr, s_addr, chr_now, res_chr_can_read - 1]
+
+    PUSHIMM 2
+    DUP
+    // stack: [s_addr, max_siz, chr_read, ret_addr, s_addr, chr_now, res_chr_can_read - 1, s_addr]
+
+    PUSHIMM 1
+    ADD
+    // stack: [s_addr, max_siz, chr_read, ret_addr, s_addr, chr_now, res_chr_can_read - 1, s_addr + 1]
+
+    PUSHIMM 2
+    POPS
+    // stack: [s_addr, max_siz, chr_read, ret_addr, s_addr + 1, chr_now, res_chr_can_read - 1]
+
+    PUSHIMM 4
+    DUP
+    // stack: [s_addr, max_siz, chr_read, ret_addr, s_addr + 1, chr_now, res_chr_can_read - 1, chr_read]
+
+    PUSHIMM 1
+    ADD
+    // stack: [s_addr, max_siz, chr_read, ret_addr, s_addr + 1, chr_now, res_chr_can_read - 1, chr_read + 1]
+
+    PUSHIMM 4
+    POPS
+    // stack: [s_addr, max_siz, chr_read + 1, ret_addr, s_addr + 1, chr_now, res_chr_can_read - 1]
+
+    EXCH
+    // stack: [s_addr, max_siz, chr_read + 1, ret_addr, s_addr + 1, res_chr_can_read - 1, chr_now]
+
+    PUSHIMM 10
+    EQU
+    // stack: [s_addr, max_siz, chr_read + 1, ret_addr, s_addr + 1, res_chr_can_read - 1, (chr_now == 10)]
+
+    PUSHIMM 0
+    EXCH
+    // stack: [s_addr, max_siz, chr_read + 1, ret_addr, s_addr + 1, res_chr_can_read - 1, 0, (chr_now == 10)]
+
+    PUSHIMM _gets_ret // If char \n found, return
+    BR
+
+    // stack: [s_addr, max_siz, chr_read + 1, ret_addr, s_addr + 1, res_chr_can_read - 1, 0]
+    POP
+    // stack: [s_addr, max_siz, chr_read + 1, ret_addr, s_addr + 1, res_chr_can_read - 1]
+
+    // Loop again
+    PUSHIMM _gets_loop
+    JMP
+
+_gets_ret:
+    // stack: [s_addr, max_siz, chr_read, ret_addr, s_addr, res_chr_can_read, chr_tmp]
+    POP
+    // stack: [s_addr, max_siz, chr_read, ret_addr, s_addr, res_chr_can_read]
+
+    // set \0 in the end position
+    PUSHIMM 1
+    DUP
+    // stack: [s_addr, max_siz, chr_read, ret_addr, s_addr, res_chr_can_read, s_addr]
+    POPAP
+    LOAD
+    // stack: [s_addr, max_siz, chr_read, ret_addr, s_addr, res_chr_can_read, old_val]
+
+    PUSHIMM 0xFFFFFFFFFFFFFF00
+    AND
+    // stack: [s_addr, max_siz, chr_read, ret_addr, s_addr, res_chr_can_read, zero_low_byte]
+
+    SAVE // Save it back to AP, AP is unchanged
+    // stack: [s_addr, max_siz, chr_read, ret_addr, s_addr, res_chr_can_read]
+
+    POP
+    POP
+    // stack: [s_addr, max_siz, chr_read, ret_addr]
+
+    // Function return
+    JMP

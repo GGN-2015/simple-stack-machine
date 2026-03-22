@@ -1,0 +1,24 @@
+
+// Read a character
+getc:
+    // stack: [0, ret_addr]
+
+    PUSHIMM 8 // Address 8 is used to store the system call type
+    POPAP
+    PUSHIMM 1 // System call number 1 means reading a character from standard input
+    SAVE
+    SYSCAL
+
+    // After the system call is executed, the ASCII code of the character 
+    // will be stored in the 64-bit variable at address 8
+    PUSHIMM 8
+    POPAP
+    LOAD // Put this value onto the stack
+    // stack: [0, ret_addr, chr_val]
+
+    PUSHIMM 1
+    POPS
+    // stack: [chr_val, ret_addr]
+
+    // Function return
+    JMP

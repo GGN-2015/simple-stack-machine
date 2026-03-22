@@ -1,0 +1,32 @@
+
+// Output string
+// Return the number of characters successfully output
+puts:
+    // stack: [str_pos, 0, ret_addr]
+
+    // Copy pointer to system call parameter
+    PUSHIMM 2
+    DUP
+    PUSHIMM 16
+    POPAP
+    SAVE
+
+    // Initiate system call No.2
+    // Output string
+    PUSHIMM 8
+    POPAP
+    PUSHIMM 2
+    SAVE
+    SYSCAL
+
+    // Get the number of characters successfully output
+    PUSHIMM 8
+    POPAP
+    LOAD
+    // stack: [str_pos, 0, ret_addr, char_cnt]
+
+    PUSHIMM 1
+    POPS
+    // stack: [str_pos, char_cnt, ret_addr]
+    // Function return
+    JMP

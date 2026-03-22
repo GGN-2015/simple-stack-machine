@@ -60,7 +60,7 @@ stack: [..., arg_1, arg_2, ..., arg_n, 0, ret_addr]
 Inside the target function:
 - You may copy and use `arg_1, ..., arg_n` as needed
 - You **must** assign the function’s return value to the position of the `0` (we mandate all return values are integers)
-- Avoid modifying `ret_val` or any positions before it (except the return value storage location)
+- Avoid modifying `ret_addr` or any positions before it (except the return value storage location)
 
 After the target function returns, the stack state becomes:
 

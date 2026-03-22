@@ -1,6 +1,7 @@
 from typing import Optional, Any
 import sys
 import re
+import os
 
 try:
     from .ins_code import INSTURCTION_MAP, VAL_RANGE, DEASM_INSTURCTION_MAP
@@ -31,6 +32,9 @@ class ProgramFile:
         self.syscal_hook:dict[int, Any] = {}
         self.stdout_arr = ""
 
+        # A certain .iasm file can only be included onve
+        self.file_included = set()
+
         # Enable this switch to prevent the program from outputting content to the standard output stream
         # and only record the program's output through the self.stdout_arr string
         self.ignore_stdout = False 
@@ -44,9 +48,9 @@ class ProgramFile:
             for item in syscal_hook
         }
 
-    def _chk_nxt_pos(self, position_now:int, line_id:int):
+    def _chk_nxt_pos(self, file_now:str, position_now:int, line_id:int):
         if position_now >= VAL_RANGE:
-            raise ValueError(f"{line_id}: position_now out of bound.")
+            raise ValueError(f"{file_now}: {line_id}: position_now out of bound.")
 
     def check_pos(self, position_now:int):
         if self.initial_memory.get(position_now) is not None:
@@ -253,7 +257,7 @@ class ProgramFile:
             elif cmd == "LOAD":
                 for i in range(8):
                     self.memory[self.sp + i] = (
-                        self.memory[self.ap + i]
+                        self.memory.get(self.ap + i, 0)
                     )
                 self.sp += 8
                 self.pc += 1
@@ -262,7 +266,7 @@ class ProgramFile:
                 self.sp -= 8
                 for i in range(8):
                     self.memory[self.ap + i] = (
-                        self.memory[self.sp + i]
+                        self.memory.get(self.sp + i, 0)
                     )
                 self.pc += 1
 
@@ -351,7 +355,7 @@ class ProgramFile:
                 val_2 = self._get_integer(self.sp)
                 self.sp -= 8
                 val_1 = self._get_integer(self.sp)
-                ans = (val_1 & val_2) % VAL_RANGE
+                ans = (val_1 | val_2) % VAL_RANGE
                 self._set_integer(ans, self.sp)
                 self.sp += 8
                 self.pc += 1
@@ -465,24 +469,72 @@ class ProgramFile:
             if self._get_integer(0) != 0:
                 self._syscal()
 
+    def get_all_lines(self, asm_filepath:str, encoding:str) -> list[tuple[int, str, str]]:
+        ans = []
 
+        # Check file exists
+        if not os.path.isfile(asm_filepath):
+            raise FileNotFoundError()
+        
+        # Get absolute filepath
+        if not os.path.isabs(asm_filepath):
+            asm_filepath = os.path.abspath(asm_filepath)
+        rel_path = os.path.relpath(asm_filepath)
+
+        # Do not include one file twice
+        if asm_filepath in self.file_included:
+            return []
+        self.file_included.add(asm_filepath)
+        
+        # Get folder path
+        dirnow = os.path.dirname(asm_filepath)
+
+        for idx, line in enumerate(list(open(asm_filepath, "r", encoding=encoding))):
+            line = line.strip()
+
+
+            # Erase comment
+            if line.find("//") != -1:
+                line = line.split("//")[0].strip()
+
+            # Skip empty line
+            if line == "":
+                continue
+
+            # Include file
+            if line.startswith("INCLUDE"):
+                next_path = eval(line[len("INCLUDE"):], globals=dict(), locals=dict())
+                next_path = os.path.join(dirnow, next_path)
+
+                ans += self.get_all_lines(next_path, encoding)
+                continue
+
+            # Not INCLUDE command
+            ans.append((idx + 1, rel_path, line))
+
+        return ans
 
     # This function returns a dict[str, int]
     # representing the program positions corresponding to all symbols
-    def read_program(self, filepath:str, encoding="utf-8", debug=False) -> dict:
+    def read_program(self, filepath:str, encoding="utf-8", debug=False) -> dict[str, int]:
         position_now = 0
         segment_begin_now = 0
 
-        late_insert:dict[tuple[int, int], str] = {} # Record delayed insertion positions
+        # Get current abspath
+        asm_filepath = os.path.abspath(filepath)
+
+        late_insert:dict[tuple[int, str, int], str] = {} # Record delayed insertion positions
         token_value:dict[str, int] = {} # Record the values of identifiers
 
-        for line_id, line in enumerate(list(open(filepath, "r", encoding=encoding))):
-            # Remove comments
-            line = line.strip()
-            line = line.split("//", maxsplit=1)[0].strip()
-            if line == "":
-                continue
+        all_lines = self.get_all_lines(asm_filepath, encoding) # Get all line in a program
+        for line_id, file_now, line in all_lines:
             
+            # Only PUSHIMM has parameter
+            parts = line.split(maxsplit=1)
+            if INSTURCTION_MAP.get(parts[0]) is not None:
+                if parts[0] != "PUSHIMM" and len(parts) >= 2:
+                    raise ValueError(f"{file_now}: {line_id}: command {parts[0]} can not followed by arguments.")
+
             # Process four types of items
             #   Position adjustment symbols
             #   Instructions
@@ -496,7 +548,7 @@ class ProgramFile:
                     self.check_pos(position_now)
                     self.initial_memory[position_now] = val % 256
                     position_now += 1
-                    self._chk_nxt_pos(position_now, line_id)
+                    self._chk_nxt_pos(file_now, position_now, line_id)
 
                 # Recognize instructions
                 elif INSTURCTION_MAP.get(part) is not None:
@@ -505,7 +557,7 @@ class ProgramFile:
                         INSTURCTION_MAP[part]
                     )
                     position_now += 1
-                    self._chk_nxt_pos(position_now, line_id)
+                    self._chk_nxt_pos(file_now, position_now, line_id)
 
                 # Recognize colons
                 # Consider jump identifiers and position adjusters separately
@@ -526,7 +578,7 @@ class ProgramFile:
 
                         position_now = int(data_val)
                         segment_begin_now = position_now
-                        self._chk_nxt_pos(position_now, line_id)
+                        self._chk_nxt_pos(file_now, position_now, line_id)
 
                     # Got a jump identifier
                     else:
@@ -545,18 +597,18 @@ class ProgramFile:
                             self.check_pos(position_now)
                             self.initial_memory[position_now] = chr_now
                             position_now += 1
-                            self._chk_nxt_pos(position_now, line_id)
+                            self._chk_nxt_pos(file_now, position_now, line_id)
 
                     # Interpret as an identifier usage
                     # Identifiers need to be assigned after global scanning is complete
                     else:
-                        late_insert[(position_now, line_id)] = part
+                        late_insert[(position_now, file_now, line_id)] = part
                         position_now += 8
-                        self._chk_nxt_pos(position_now, line_id)
+                        self._chk_nxt_pos(file_now, position_now, line_id)
 
         # Fill values for identifiers
-        for pos, line_id in late_insert:
-            token = late_insert[(pos, line_id)]
+        for pos, file_now, line_id in late_insert:
+            token = late_insert[(pos, file_now, line_id)]
             if token_value.get(token) is None:
                 raise ValueError(f"{line_id}: token {token} undefined.")
             data_val = token_value[token]
@@ -566,7 +618,7 @@ class ProgramFile:
                 self.check_pos(position_now)
                 self.initial_memory[pos_now] = chr_now
                 pos_now += 1
-                self._chk_nxt_pos(pos_now, line_id)
+                self._chk_nxt_pos(file_now, pos_now, line_id)
 
         # Return symbol table
         return token_value
@@ -680,7 +732,7 @@ class ProgramFile:
                 for item in output_item
                 if item.strip() != "" and not item.strip().startswith("//")]
             for i in range(2, len(non_empty_pos)):
-                if non_empty_pos[i].strip() == "BR" or non_empty_pos[i].strip() == "JMP":
+                if non_empty_pos[i].strip() in ["BR", "JMP", "CALL"]:
                     if non_empty_pos[i-2] == "PUSHIMM":
                         pos_set.add(self.safe_val_eval(non_empty_pos[i-1]))
 
@@ -693,6 +745,8 @@ class ProgramFile:
 
 if __name__ == "__main__":
     pf = ProgramFile()
-    pf.read_program("sample_asm/euclid.asm")
+    symbol_map = pf.read_program("sample_asm/putc.asm")
+    print(symbol_map)
+    # pf.de_asm()
     ret = pf.run(debug_mode=False)
     print(f"program return 0x{ret:016x} ({ret})")
