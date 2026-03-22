@@ -74,6 +74,8 @@ Where `ret_ans` is the function’s computed result.
 
 ### 0. Do Nothing: NOP
 
+This command will do nothing, the initial value in memory is zero.
+
 ```cpp
 PC += 1;
 ```
@@ -82,10 +84,16 @@ PC += 1;
 
 ```cpp
 SP -= 8;
-exit(make_interger(mem, SP, SP + 8));
+exit(make_interger(mem, SP, SP + 8) % 256);
 ```
 
 ### 2. Discard Top Stack Element: POP
+
+The top value in stack will be erased, and the stack pointer (SP) will minus 8 bytes.
+
+Stack status before: `[..., stk_top_val]`
+
+Stack status after: `[...]`
 
 ```cpp
 SP -= 8;
@@ -93,6 +101,12 @@ PC += 1;
 ```
 
 ### 3. Assign to Address Pointer: POPAP
+
+The top value in stack will be poped and then saved into register address pointer (AP).
+
+Stack status before: `[..., stk_top_val]`
+
+Stack status after: `[...]`
 
 ```cpp
 {
@@ -104,6 +118,12 @@ PC += 1;
 
 ### 4. Push Immediate Value to Stack: PUSHIMM
 
+This is the only command in this machine code to introduce an immediate integer into memory.
+
+Stack status before: `[...]`
+
+Stack status after: `[..., imm_val]`
+
 ```cpp
 for(int i = 0; i < 8; i += 1) {
     mem[SP + i] = mem[PC + 1 + i];
@@ -113,6 +133,12 @@ PC += 9; // Occupies 9 bytes in the program
 ```
 
 ### 5. Assign to Stack Pointer: POPSP
+
+The top value in stack will be poped and then saved into register stack pointer (SP).
+
+Stack status before: `[..., stk_top_val]`
+
+Stack status after: `[...]`
 
 ```cpp
 {
@@ -124,6 +150,12 @@ PC += 1;
 
 ### 6. Push Stack Pointer Value to Stack: PUSHSP
 
+Push the current value of register stack pointer (SP) into stack. Important fact is that, the new value in SP is greater then the value you pushed into stack.
+
+Stack status before: `[...]`
+
+Stack status after: `[..., sp_old_val]`
+
 ```cpp
 save_interger(SP, mem, SP, SP + 8);
 SP += 8;
@@ -132,6 +164,12 @@ PC += 1;
 
 ### 7. Push Program Counter Value to Stack: PUSHPC
 
+Push the current address of machine code to the top of the stack.
+
+Stack status before: `[...]`
+
+Stack status after: `[..., old_pc]`
+
 ```cpp
 save_interger(PC, mem, SP, SP + 8);
 SP += 8;
@@ -139,6 +177,12 @@ PC += 1;
 ```
 
 ### 8. Function Call: CALL
+
+Get an address from stack top and then jump to that address to execute a function, in the meanwhile, push the return address into stack. The return address is the position of the next command of current command `CALL`.
+
+Stack status before: `[..., func_addr]`
+
+Stack status after: `[..., ret_addr]`
 
 ```cpp
 {
@@ -152,6 +196,8 @@ PC += 1;
 
 ### 9. Load Memory to Stack Top: LOAD
 
+Load a 64-bit interger from the address indicated by register AP, then send it to stack top.
+
 ```cpp
 for(int i = 0; i < 8; i += 1) {
     mem[SP + i] = mem[AP + i];
@@ -161,6 +207,8 @@ PC += 1;
 ```
 
 ### 10. Write Stack Top to Memory: SAVE
+
+Save the 64-bit value on stack top to the address indicated by register AP, then erased the value in stack by modifying register SP.
 
 ```cpp
 SP -= 8;
@@ -172,15 +220,19 @@ PC += 1;
 
 ### 11. System Call: SYSCAL
 
+Trigger system call. System call arguments are stored in `mem[8] ~ mem[63]`. After completion, `mem[0] ~ mem[3]` is cleared to 0. `mem[8] ~ mem[63]` may contain return results after system call returns.
+
 ```cpp
-mem[0] = 1; // Trigger system call
-            // System call arguments are stored in mem[8] ~ mem[63]
-            // After completion, mem[0] is cleared to 0
-            // mem[8] ~ mem[63] may contain return results
+mem[0] = 1;
+
+// system auto executing
+
 PC += 1;
 ```
 
 ### 12. Signed Addition: ADD
+
+Add two signed integer on stack top, and then push the result back to stack top.
 
 ```cpp
 {
@@ -198,6 +250,8 @@ PC += 1;
 
 ### 13. Signed Subtraction: SUB
 
+Subtract two signed integer on stack top, and then push the result back to stack top. Notice, the result is the second value on stack top subtracted by the first value on stack top.
+
 ```cpp
 {
     SP -= 8;
@@ -213,6 +267,8 @@ PC += 1;
 ```
 
 ### 14. Signed Multiplication: MUL
+
+Multiply two signed integer on stack top, and then push the result back to stack top.
 
 ```cpp
 {
@@ -230,6 +286,8 @@ PC += 1;
 
 ### 15. Signed Division: DIV
 
+Divide two signed integer on stack top, and then push the result back to stack top. Notice, the result is the second value on stack top divided by the first value on stack top.
+
 ```cpp
 {
     SP -= 8;
@@ -245,6 +303,8 @@ PC += 1;
 ```
 
 ### 16. Signed Modulo: MOD
+
+Modulo two signed integer on stack top, and then push the result back to stack top. Notice, the result is the second value on stack top moduloed by the first value on stack top.
 
 ```cpp
 {
@@ -345,7 +405,7 @@ PC += 1;
     SP -= 8;
     long long val_1 = make_interger(mem, SP, SP + 8);
     
-    long long ans = (val_1 >> val_2);
+    long long ans = ((unsigned long long)val_1 >> val_2);
     save_interger(ans, mem, SP, SP + 8); // Store result back to stack top
     SP += 8;
 }
@@ -456,6 +516,12 @@ PC += 1;
 
 ### 30. Set Stack Element: POPS
 
+Pop an element from stack and then save it back to some position in stack, the position is indicated by an offset.
+
+Stack Status Before: `[..., arr_i, ..., arr_1, arr_0, val, i]`
+
+Stack Status After: `[..., val, ..., arr_1, arr_0]`
+
 ```cpp
 {
     SP -= 8;
@@ -472,6 +538,10 @@ PC += 1;
 ```
 
 ### 31. Swap Top Two Stack Elements: EXCH
+
+Stack Status Before: `[..., v1, v2]`
+
+Stack Status Before: `[..., v2, v1]`
 
 ```cpp
 {

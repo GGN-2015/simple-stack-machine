@@ -21,8 +21,8 @@ class ProgramFile:
         return eval(s)
 
     def _clear(self):
-        self.initial_memory = {}
-        self.memory = {}
+        self._initial_memory = {}
+        self._memory = {}
         self.pc = 0
         self.sp = 0
         self.init_sp = 0 # Initial sp
@@ -32,7 +32,7 @@ class ProgramFile:
         self.syscal_hook:dict[int, Any] = {}
         self.stdout_arr = ""
 
-        # A certain .iasm file can only be included onve
+        # A certain .iasm file can only be included once
         self.file_included = set()
 
         # Enable this switch to prevent the program from outputting content to the standard output stream
@@ -52,15 +52,24 @@ class ProgramFile:
         if position_now >= VAL_RANGE:
             raise ValueError(f"{file_now}: {line_id}: position_now out of bound.")
 
+    # You can not initialize a position twice in a same program
     def check_pos(self, position_now:int):
-        if self.initial_memory.get(position_now) is not None:
+        if self._initial_memory.get(position_now) is not None:
             raise ValueError(f"{position_now} refilled.")
     
+    # Read memory
+    def get_memory(self, pos:int) -> int:
+        return self._memory.get(pos % VAL_RANGE, 0)
+
+    # Write memory
+    def set_memory(self, chr_val:int, pos:int):
+        self._memory[pos % VAL_RANGE] = (chr_val % 256)
+
     # Get integer from memory
     def _get_integer(self, pos:int, siz:int=8) -> int:
         data_list = []
         for i in range(siz):
-            data_list.append(self.memory.get((pos + i) % VAL_RANGE, 0)  % 256)
+            data_list.append(self.get_memory(pos + i))
         data_val = 0
         for i in range(siz - 1, -1, -1):
             data_val = ((data_val << 8) | data_list[i])
@@ -73,13 +82,13 @@ class ProgramFile:
         for i in range(siz):
             data_list.append((val >> (8 * i)) & 255)
         for i in range(siz):
-            self.memory[pos + i] = data_list[i]
+            self.set_memory(data_list[i], pos + i)
 
     # Copy from self.initial_memory to self.memory
     def _load_memory(self):
-        self.memory = {}
-        for item in self.initial_memory:
-            self.memory[item] = self.initial_memory[item]
+        self._memory = {}
+        for item in self._initial_memory:
+            self._memory[item] = self._initial_memory[item]
 
     # System call
     def _syscal(self):
@@ -97,7 +106,7 @@ class ProgramFile:
         # Use user-defined system call
         if self.syscal_hook.get(data[1]) is not None:
             func = self.syscal_hook[data[1]]
-            func(self.memory, data)
+            func(self._memory, data)
 
         elif data[1] == 1: # Input a character
             try:
@@ -110,14 +119,14 @@ class ProgramFile:
             pos_now = data[2]
             chr_cnt = 0
             while True:
-                if self.memory.get(pos_now, 0) == 0:
+                if self.get_memory(pos_now) == 0:
                     break
 
                 # Record the program's standard output
                 chr_cnt += 1
-                self.stdout_arr += chr(self.memory[pos_now])
+                self.stdout_arr += chr(self.get_memory(pos_now))
                 if not self.ignore_stdout:
-                    print(chr(self.memory[pos_now]), end="")
+                    print(chr(self.get_memory(pos_now)), end="")
                 pos_now += 1
             self._set_integer(chr_cnt, 8) # The number of successfully output characters is sent to data[1]
 
@@ -178,9 +187,17 @@ class ProgramFile:
             return val
 
     # Run the program
-    def run(self, debug_mode:Optional[bool]=None) -> int:
+    def run(self, debug_mode:Optional[bool]=None, ignore_stdout:Optional[bool]=None) -> int:
+
+        # Debug mode
+        # The program will pause and output stack status before executing every command
         if isinstance(debug_mode, bool):
             self.debug = debug_mode
+
+        # Ignore output to STDIN
+        # You program will output nothing to command line
+        if isinstance(ignore_stdout, bool):
+            self.ignore_stdout = ignore_stdout
 
         if self.finish is True:
             raise ValueError("you can not run program twice.")
@@ -193,7 +210,7 @@ class ProgramFile:
 
         while True:
             
-            cmd_val = self.memory.get(self.pc, 0)
+            cmd_val = self.get_memory(self.pc)
             if DEASM_INSTURCTION_MAP.get(cmd_val) is None:
                 raise ValueError(f"{cmd_val} is not a command.")
             
@@ -226,9 +243,8 @@ class ProgramFile:
 
             elif cmd == "PUSHIMM":
                 for i in range(8):
-                    self.memory[self.sp + i] = (
-                        self.memory[self.pc + 1 + i]
-                    )
+                    self.set_memory(
+                        self.get_memory(self.pc + 1 + i), self.sp + i)
                 self.sp += 8
                 self.pc += 9
 
@@ -256,18 +272,16 @@ class ProgramFile:
 
             elif cmd == "LOAD":
                 for i in range(8):
-                    self.memory[self.sp + i] = (
-                        self.memory.get(self.ap + i, 0)
-                    )
+                    self.set_memory(
+                        self.get_memory(self.ap + i), self.sp + i)
                 self.sp += 8
                 self.pc += 1
 
             elif cmd == "SAVE":
                 self.sp -= 8
                 for i in range(8):
-                    self.memory[self.ap + i] = (
-                        self.memory.get(self.sp + i, 0)
-                    )
+                    self.set_memory(
+                        self.get_memory(self.sp + i), self.ap + i)
                 self.pc += 1
 
             elif cmd == "SYSCAL":
@@ -437,11 +451,8 @@ class ProgramFile:
                 self.sp -= 8
                 offset = self._get_integer(self.sp)
                 for i in range(8):
-                    val_now = self.memory.get(
-                            (self.sp - (8 * offset) - 8 + i) % VAL_RANGE, 0)
-                    self.memory[self.sp + i] = (
-                        val_now
-                    )
+                    val_now = self.get_memory(self.sp - (8 * offset) - 8 + i)
+                    self.set_memory(val_now, self.sp + i)
                 self.sp += 8
                 self.pc += 1
 
@@ -451,15 +462,16 @@ class ProgramFile:
                 self.sp -= 8
                 val_pos = self.sp
                 for i in range(8):
-                    self.memory[self.sp - 8 * offset - 8 + i] = (
-                        self.memory[val_pos + i])
+                    self.set_memory(
+                        self.get_memory(val_pos + i), self.sp - 8 * offset - 8 + i)
                 self.pc += 1
 
             elif cmd == "EXCH":
                 for i in range(8):
-                    t = self.memory[self.sp - 16 + i]
-                    self.memory[self.sp - 16 + i] = self.memory[self.sp -8 + i]
-                    self.memory[self.sp - 8 + i] = t
+                    t = self.get_memory(self.sp - 16 + i)
+                    self.set_memory(
+                        self.get_memory(self.sp -8 + i), self.sp - 16 + i)
+                    self.set_memory(t, self.sp - 8 + i)
                 self.pc += 1
 
             else:
@@ -546,14 +558,14 @@ class ProgramFile:
                 if part.startswith("#"):
                     val = self.safe_val_eval(part[1:])
                     self.check_pos(position_now)
-                    self.initial_memory[position_now] = val % 256
+                    self._initial_memory[position_now] = val % 256
                     position_now += 1
                     self._chk_nxt_pos(file_now, position_now, line_id)
 
                 # Recognize instructions
                 elif INSTURCTION_MAP.get(part) is not None:
                     self.check_pos(position_now)
-                    self.initial_memory[position_now] = (
+                    self._initial_memory[position_now] = (
                         INSTURCTION_MAP[part]
                     )
                     position_now += 1
@@ -573,7 +585,7 @@ class ProgramFile:
                         # Ensure the current segment length is a multiple of eight
                         while (position_now - segment_begin_now) % 8 != 0:
                             self.check_pos(position_now)
-                            self.initial_memory[position_now] = 0
+                            self._initial_memory[position_now] = 0
                             position_now += 1
 
                         position_now = int(data_val)
@@ -595,7 +607,7 @@ class ProgramFile:
                         for i in range(8):
                             chr_now = (data_val >> (i * 8)) & ((1 << 8) - 1)
                             self.check_pos(position_now)
-                            self.initial_memory[position_now] = chr_now
+                            self._initial_memory[position_now] = chr_now
                             position_now += 1
                             self._chk_nxt_pos(file_now, position_now, line_id)
 
@@ -616,7 +628,7 @@ class ProgramFile:
             for i in range(8):
                 chr_now = (data_val >> (i * 8)) & ((1 << 8) - 1)
                 self.check_pos(position_now)
-                self.initial_memory[pos_now] = chr_now
+                self._initial_memory[pos_now] = chr_now
                 pos_now += 1
                 self._chk_nxt_pos(file_now, pos_now, line_id)
 
@@ -643,7 +655,7 @@ class ProgramFile:
             ans = 0
             for i in range(15, 7, -1):
                 ans = (
-                    (ans << 8) | self.initial_memory.get(i, 0))
+                    (ans << 8) | self._initial_memory.get(i, 0))
             program_segment = [ans]
         assert isinstance(program_segment, list)
 
@@ -651,7 +663,7 @@ class ProgramFile:
         ps_id = 1
 
         # Start disassembly
-        pos_val_pairt = sorted(list(self.initial_memory.items()))
+        pos_val_pairt = sorted(list(self._initial_memory.items()))
         vis = {}
         for begin_pos, _ in pos_val_pairt:
             if vis.get(begin_pos) is not None:
@@ -669,7 +681,7 @@ class ProgramFile:
                 ps_id += 1
 
             index = 0
-            while self.initial_memory.get(begin_pos + index) is not None:
+            while self._initial_memory.get(begin_pos + index) is not None:
                 if line_front:
                     output_item.append("    ")
                     line_front = False
@@ -677,7 +689,7 @@ class ProgramFile:
                 if not is_program:
                     arr = []
                     for i in range(8):
-                        arr.append(f"{self.initial_memory.get(begin_pos + index + i, 0):02x}")
+                        arr.append(f"{self._initial_memory.get(begin_pos + index + i, 0):02x}")
                         vis[begin_pos + index + i] = True
                     output_item.append(f"0x{"".join(arr[::-1])} ")
                     index += 8
@@ -687,7 +699,7 @@ class ProgramFile:
                         output_item.append("// initial sp\n")
                     line_front = True
                 else:
-                    val = self.initial_memory[begin_pos + index]
+                    val = self._initial_memory[begin_pos + index]
                     vis[begin_pos + index] = True
 
                     if (begin_pos + index) in pos_set:
@@ -706,7 +718,7 @@ class ProgramFile:
                             for i in range(8):
                                 pos_now = begin_pos + index + 1 + i
                                 vis[pos_now] = True
-                                arr.append(f"{self.initial_memory.get(pos_now, 0):02x}")
+                                arr.append(f"{self._initial_memory.get(pos_now, 0):02x}")
                             output_item.append((" 0x" + ("".join(arr[::-1]))) + "\n")
                             index += 9
 
@@ -745,7 +757,7 @@ class ProgramFile:
 
 if __name__ == "__main__":
     pf = ProgramFile()
-    symbol_map = pf.read_program("sample_asm/putc.asm")
+    symbol_map = pf.read_program("sample_asm/fib.asm")
     print(symbol_map)
     # pf.de_asm()
     ret = pf.run(debug_mode=False)
