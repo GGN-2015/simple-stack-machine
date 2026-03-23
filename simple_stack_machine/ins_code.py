@@ -1,8 +1,9 @@
 
-# 数值空间范围
+# The largest value (plus 1)
 VAL_RANGE = (1 << 64)
 
-# 指令到整数的映射
+# Map function function
+# From asm code to machine code
 INSTURCTION_MAP = {
     "NOP": 0,
     "HALT": 1,
@@ -20,7 +21,7 @@ INSTURCTION_MAP = {
     "SUB": 13,
     "MUL": 14,
     "DIV": 15,
-    "MOD": 16,
+    "PLACEHOLDER_16": 16,
     "NEG": 17,
     "NOT": 18,
     "AND": 19,
@@ -38,12 +39,12 @@ INSTURCTION_MAP = {
     "EXCH": 31,
 }
 
-# 反向映射整数到命令
+# reversed map function
 DEASM_INSTURCTION_MAP = {
     INSTURCTION_MAP[item]: item
     for item in INSTURCTION_MAP
 }
 
-# 两个 dict 长度如果不同
-# 则说明有重复名称或重复编码
+# if two dict share not the same length
+# means duplicated name or machine code
 assert len(INSTURCTION_MAP) == len(DEASM_INSTURCTION_MAP)

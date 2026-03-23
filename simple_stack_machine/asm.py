@@ -323,19 +323,16 @@ class ProgramFile:
                 val_2 = self._get_integer(self.sp)
                 self.sp -= 8
                 val_1 = self._get_integer(self.sp)
-                ans = (val_1 // val_2) % VAL_RANGE
-                self._set_integer(ans, self.sp)
+                ans1 = (val_1 // val_2) % VAL_RANGE
+                ans2 = (val_1  % val_2) % VAL_RANGE
+                self._set_integer(ans2, self.sp)
+                self.sp += 8
+                self._set_integer(ans1, self.sp)
                 self.sp += 8
                 self.pc += 1
 
-            elif cmd == "MOD":
-                self.sp -= 8
-                val_2 = self._get_integer(self.sp)
-                self.sp -= 8
-                val_1 = self._get_integer(self.sp)
-                ans = (val_1 % val_2) % VAL_RANGE
-                self._set_integer(ans, self.sp)
-                self.sp += 8
+            # currently undefined
+            elif cmd == "PLACEHOLDER_16":
                 self.pc += 1
 
             elif cmd == "NEG":
@@ -757,7 +754,7 @@ class ProgramFile:
 
 if __name__ == "__main__":
     pf = ProgramFile()
-    symbol_map = pf.read_program("sample_asm/fib.asm")
+    symbol_map = pf.read_program("sample_asm/euclid.asm")
     print(symbol_map)
     # pf.de_asm()
     ret = pf.run(debug_mode=False)

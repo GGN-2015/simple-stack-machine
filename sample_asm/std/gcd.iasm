@@ -29,7 +29,9 @@ gcd:
     DUP
     // stack: [..., a, b, 0, ret_addr, b, a, b]
 
-    MOD
+    DIV
+    // stack: [..., a, b, 0, ret_addr, b, a % b, a / b]
+    POP
     // stack: [..., a, b, 0, ret_addr, b, a % b]
 
     // Construct information for next function call

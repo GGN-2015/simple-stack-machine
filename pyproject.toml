@@ -1,6 +1,6 @@
 [project]
 name = "simple-stack-machine"
-version = "0.1.1"
+version = "0.1.2"
 description = "A simple stack-style machine language interpreter."
 authors = [
     {name = "GGN_2015",email = "neko@jlulug.org"}

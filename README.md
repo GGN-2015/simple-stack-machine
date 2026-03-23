@@ -158,7 +158,7 @@ Stack status after: `[..., sp_old_val]`
 
 ```cpp
 save_interger(SP, mem, SP, SP + 8);
-SP += 8;
+SP += 8; // which is sp_old_val + 8
 PC += 1;
 ```
 
@@ -288,23 +288,9 @@ PC += 1;
 
 Divide two signed integer on stack top, and then push the result back to stack top. Notice, the result is the second value on stack top divided by the first value on stack top.
 
-```cpp
-{
-    SP -= 8;
-    long long val_2 = make_interger(mem, SP, SP + 8); // mem[SP] ... mem[SP + 7] form a 64-bit integer
-    SP -= 8;
-    long long val_1 = make_interger(mem, SP, SP + 8);
-    
-    long long ans = val_1 / val_2;
-    save_interger(ans, mem, SP, SP + 8); // Store result back to stack top
-    SP += 8;
-}
-PC += 1;
-```
+Stack Status Before: `[..., val_1, val_2]`
 
-### 16. Signed Modulo: MOD
-
-Modulo two signed integer on stack top, and then push the result back to stack top. Notice, the result is the second value on stack top moduloed by the first value on stack top.
+Stack Status After: `[..., val_1 % val_2, val_1 / val_2]`
 
 ```cpp
 {
@@ -313,12 +299,23 @@ Modulo two signed integer on stack top, and then push the result back to stack t
     SP -= 8;
     long long val_1 = make_interger(mem, SP, SP + 8);
     
-    long long ans = val_1 % val_2;
-    save_interger(ans, mem, SP, SP + 8); // Store result back to stack top
+    // Sign of remainder is correspond to sign of val_2
+    // ans1 is floor((double)val_1 / val_2)
+    long long ans1 = val_1 / val_2;
+    long long ans2 = val_1 % val_2;
+
+    // save remainder
+    save_interger(ans2, mem, SP, SP + 8);
+    SP += 8;
+
+    // save quotient
+    save_interger(ans1, mem, SP, SP + 8);
     SP += 8;
 }
 PC += 1;
 ```
+
+### 16. Unused
 
 ### 17. Negation: NEG
 
@@ -430,6 +427,12 @@ PC += 1;
 
 ### 24. Unconditional Jump: JMP
 
+Pop the address value on stack top, and then jump to the address. This command is also used as function return.
+
+Stack Status Before: `[..., aim_addr]`
+
+Stack Status After: `[...]`
+
 ```cpp
 SP -= 8;
 PC = make_interger(mem, SP, SP + 8);
@@ -437,21 +440,29 @@ PC = make_interger(mem, SP, SP + 8);
 
 ### 25. Conditional Jump: BR
 
+Jump to aim address if `jump_flag` is not zero, then pop the top two value in stack.
+
+Stack Status Before: `[..., jump_flag, aim_address]`
+
+Stack Status After: `[...]`
+
 ```cpp
 {
     SP -= 8;
-    long long val_2 = make_interger(mem, SP, SP + 8); // mem[SP] ... mem[SP + 7] form a 64-bit integer
+    long long aim_address = make_interger(mem, SP, SP + 8); // mem[SP] ... mem[SP + 7] form a 64-bit integer
     SP -= 8;
-    long long val_1 = make_interger(mem, SP, SP + 8);
+    long long jump_flag = make_interger(mem, SP, SP + 8);
     
-    if(val_1 != 0) {
-        PC = val_2 - 1;
+    if(jump_flag != 0) {
+        PC = aim_address - 1;
     }
 }
 PC += 1;
 ```
 
 ### 26. Less Than or Equal: LEQ
+
+Compare the top two value (signed integer) in stack, erase them and push the result back to stack.
 
 ```cpp
 {
@@ -469,6 +480,8 @@ PC += 1;
 
 ### 27. Less Than: LT
 
+Compare the top two value (signed integer) in stack, erase them and push the result back to stack.
+
 ```cpp
 {
     SP -= 8;
@@ -485,6 +498,8 @@ PC += 1;
 
 ### 28. Equal To: EQU
 
+Compare the top two value (signed integer) in stack, erase them and push the result back to stack.
+
 ```cpp
 {
     SP -= 8;
@@ -500,6 +515,12 @@ PC += 1;
 ```
 
 ### 29. Duplicate Stack Element: DUP
+
+Duplicate a certain value in stack, the number of element in stack remains unchanged.
+
+Stack Status Before: `[..., arr_i, ..., arr_1, arr_0, i]`
+
+Stack Status After: `[..., arr_i, ..., arr_1, arr_0, arr_i]`
 
 ```cpp
 {

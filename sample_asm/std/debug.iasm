@@ -17,3 +17,22 @@ debug_on:
     // stack: [ret_addr]
     // Function return
     JMP
+
+// Turn off debug mode
+debug_off:
+    // stack: [ret_addr]
+
+    PUSHIMM 8
+    POPAP
+    PUSHIMM 3
+    SAVE    
+    
+    PUSHIMM 16
+    POPAP
+    PUSHIMM 0
+    SAVE
+    SYSCAL
+    
+    // stack: [ret_addr]
+    // Function return
+    JMP
